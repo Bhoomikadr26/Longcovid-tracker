@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CovidSense AI — Long COVID Risk Assessment</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+
+<style>
+:root {
+  --bg: #0b0f1a;
+  --surface: #111827;
+  --surface2: #1a2235;
+  --border: rgba(99,179,237,0.12);
+  --accent: #38bdf8;
+  --accent2: #818cf8;
+  --accent3: #34d399;
+  --danger: #f87171;
+  --warn: #fbbf24;
+  --text: #e2e8f0;
+  --text-muted: #64748b;
+  --text-dim: #94a3b8;
+  --card-shadow: 0 4px 32px rgba(0,0,0,0.4);
+  --glow: 0 0 30px rgba(56,189,248,0.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Background grid */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(56,189,248,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56,189,248,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Ambient orbs */
+body::after {
+  content: '';
+  position: fixed;
+  top: -200px; left: -200px;
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(56,189,248,0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.orb2 {
+  position: fixed;
+  bottom: -200px; right: -200px;
+  width: 700px; height: 700px;
+  background: radial-gradient(circle, rgba(129,140,248,0.05) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.wrapper {
+  position: relative;
+  z-index: 1;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+}
+
+/* ─── HEADER ─── */
+.header {
+  text-align: center;
+  margin-bottom: 56px;
+  padding-top: 20px;
+}
+
+.header .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(56,189,248,0.08);
+  border: 1px solid rgba(56,189,248,0.2);
+  border-radius: 100px;
+  padding: 6px 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+
+.badge-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 2s ease infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+
+.header h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(36px, 6vw, 64px);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #e2e8f0 30%, #38bdf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.header p {
+  color: var(--text-muted);
+  font-size: 16px;
+  max-width: 480px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* ─── CARDS ─── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: var(--card-shadow);
+  transition: border-color 0.3s;
+}
+
+.card:hover { border-color: rgba(56,189,248,0.2); }
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.card-icon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.icon-blue { background: rgba(56,189,248,0.12); }
+.icon-purple { background: rgba(129,140,248,0.12); }
+.icon-green { background: rgba(52,211,153,0.12); }
+.icon-yellow { background: rgba(251,191,36,0.12); }
+
+.card-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.card-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ─── FORM FIELDS ─── */
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 600px) { .field-grid { grid-template-columns: 1fr; } }
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.field input, .field select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+}
+
+.field input:focus, .field select:focus {
+  border-color: rgba(56,189,248,0.4);
+  box-shadow: 0 0 0 3px rgba(56,189,248,0.06);
+}
+
+.field select option { background: var(--surface2); }
+
+/* ─── SLIDERS ─── */
+.symptom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) { .symptom-grid { grid-template-columns: 1fr; } }
+
+.slider-item {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 20px;
+  transition: border-color 0.2s;
+}
+
+.slider-item:hover { border-color: rgba(56,189,248,0.25); }
+
+.slider-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.slider-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider-emoji { font-size: 16px; }
+
+.slider-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--accent);
+  min-width: 28px;
+  text-align: right;
+  transition: color 0.3s;
+}
+
+input[type=range] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg);
+  outline: none;
+  cursor: pointer;
+  border: none;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(56,189,248,0.5);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+/* ─── SUBMIT BUTTON ─── */
+.submit-area {
+  text-align: center;
+  margin-top: 32px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 48px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 20px rgba(56,189,248,0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(56,189,248,0.4);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid rgba(56,189,248,0.3);
+  border-radius: 10px;
+  padding: 12px 28px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-secondary:hover {
+  background: rgba(56,189,248,0.08);
+  border-color: rgba(56,189,248,0.5);
+}
+
+/* ─── RESULT ─── */
+.result-hero {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.risk-gauge {
+  position: relative;
+  width: 140px; height: 140px;
+  flex-shrink: 0;
+}
+
+.risk-gauge svg { width: 100%; height: 100%; }
+
+.risk-label-center {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.risk-percent {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.risk-word {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.result-details { flex: 1; min-width: 200px; }
+
+.result-level {
+  font-family: 'DM Serif Display', serif;
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.result-desc {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-width: 460px;
+}
+
+.risk-low { color: var(--accent3); }
+.risk-medium { color: var(--warn); }
+.risk-high { color: var(--danger); }
+
+/* ─── ML BADGES ─── */
+.ml-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 20px;
+}
+
+@media (max-width: 640px) { .ml-grid { grid-template-columns: 1fr 1fr; } }
+
+.ml-badge {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  text-align: center;
+}
+
+.ml-badge-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.ml-badge-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--accent2);
+}
+
+/* ─── CATEGORY BARS ─── */
+.cat-list { display: flex; flex-direction: column; gap: 16px; margin-top: 4px; }
+
+.cat-item {}
+
+.cat-top {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.cat-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.cat-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.cat-bar {
+  height: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cat-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 1s cubic-bezier(0.4,0,0.2,1);
+}
+
+.fill-blue { background: linear-gradient(90deg, var(--accent2), var(--accent)); }
+.fill-green { background: linear-gradient(90deg, var(--accent3), #6ee7b7); }
+.fill-yellow { background: linear-gradient(90deg, var(--warn), #fde68a); }
+.fill-red { background: linear-gradient(90deg, var(--danger), #fca5a5); }
+
+/* ─── CHART ─── */
+.chart-wrap {
+  position: relative;
+  height: 280px;
+  margin-top: 8px;
+}
+
+/* ─── GRAPH BUTTON ─── */
+.graph-section {
+  text-align: center;
+  padding: 20px;
+  background: var(--surface2);
+  border-radius: 14px;
+  border: 1px dashed var(--border);
+}
+
+.graph-section p {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 10px;
+}
+
+/* ─── CHAT ─── */
+.chatbox {
+  height: 300px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 16px;
+  scroll-behavior: smooth;
+}
+
+.chatbox::-webkit-scrollbar { width: 4px; }
+.chatbox::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.msg {
+  padding: 12px 16px;
+  border-radius: 12px;
+  max-width: 80%;
+  margin-bottom: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  animation: fadeUp 0.3s ease;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.user {
+  background: rgba(56,189,248,0.1);
+  border: 1px solid rgba(56,189,248,0.2);
+  margin-left: auto;
+  color: var(--accent);
+}
+
+.bot {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.bot img {
+  width: 160px;
+  border-radius: 8px;
+  margin-top: 10px;
+  display: block;
+}
+
+.bot ul {
+  margin-top: 8px;
+  padding-left: 18px;
+}
+
+.bot ul li {
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.chat-select {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  outline: none;
+}
+
+.btn-icon {
+  background: rgba(56,189,248,0.1);
+  border: 1px solid rgba(56,189,248,0.2);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--accent);
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover { background: rgba(56,189,248,0.2); }
+
+/* ─── HISTORY ─── */
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.history-table th {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.history-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(99,179,237,0.06);
+  color: var(--text-dim);
+}
+
+.history-table tr:last-child td { border-bottom: none; }
+
+.risk-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.pill-low { background: rgba(52,211,153,0.12); color: var(--accent3); }
+.pill-mid { background: rgba(251,191,36,0.12); color: var(--warn); }
+.pill-high { background: rgba(248,113,113,0.12); color: var(--danger); }
+
+/* ─── DIVIDER ─── */
+.section-gap { height: 8px; }
+
+/* ─── DOWNLOAD AREA ─── */
+.download-area {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.download-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-muted);
+  min-width: 200px;
+}
+
+/* ─── VOICE SECTION ─── */
+.voice-area {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: var(--surface2);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  margin-top: 16px;
+}
+
+.voice-status {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ─── EMPTY STATES ─── */
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.empty-icon { font-size: 36px; margin-bottom: 12px; }
+
+/* ─── ANIMATIONS ─── */
+.card { animation: cardIn 0.5s ease both; }
+.card:nth-child(2) { animation-delay: 0.05s; }
+.card:nth-child(3) { animation-delay: 0.1s; }
+.card:nth-child(4) { animation-delay: 0.15s; }
+.card:nth-child(5) { animation-delay: 0.2s; }
+.card:nth-child(6) { animation-delay: 0.25s; }
+.card:nth-child(7) { animation-delay: 0.3s; }
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+
+<body>
+<div class="orb2"></div>
+
+<div class="wrapper">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="badge">
+      <div class="badge-dot"></div>
+      AI-Powered Clinical Assessment
+    </div>
+    <h1>Long COVID<br>Risk Intelligence</h1>
+    <p>Multi-model machine learning assessment for post-COVID symptom severity and personalised care guidance.</p>
+  </div>
+
+  <!-- PATIENT + SYMPTOM FORM -->
+  <form method="POST">
+
+    <!-- Patient Details -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon icon-blue">👤</div>
+        <div>
+          <div class="card-title">Patient Profile</div>
+          <div class="card-subtitle">Enter basic information to personalise the assessment</div>
+        </div>
+      </div>
+      <div class="field-grid">
+        <div class="field">
+          <label>Full Name</label>
+          <input type="text" name="name" placeholder="e.g. Arjun Sharma" required>
+        </div>
+        <div class="field">
+          <label>Age</label>
+          <input type="number" name="age" placeholder="e.g. 34" required>
+        </div>
+        <div class="field">
+          <label>Biological Sex</label>
+          <select name="gender" required>
+            <option value="">Select</option>
+            <option>Male</option>
+            <option>Female</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Symptoms -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon icon-purple">🩺</div>
+        <div>
+          <div class="card-title">Symptom Severity</div>
+          <div class="card-subtitle">Rate each symptom from 0 (none) to 10 (severe)</div>
+        </div>
+      </div>
+      <div class="symptom-grid" id="sliderGrid"></div>
+      <div class="submit-area">
+        <button type="submit" class="btn-primary">⚡ Run AI Assessment</button>
+      </div>
+    </div>
+
+  </form>
+
+  <!-- RESULT -->
+  {% if result %}
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon icon-{% if result[1] < 40 %}green{% elif result[1] < 70 %}yellow{% else %}blue{% endif %}">📊</div>
+      <div>
+        <div class="card-title">Assessment Result</div>
+        <div class="card-subtitle">Based on weighted multi-model ensemble analysis</div>
+      </div>
+    </div>
+
+    <div class="result-hero">
+      <!-- Gauge -->
+      <div class="risk-gauge">
+        <svg viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(99,179,237,0.08)" stroke-width="10"/>
+          <circle cx="60" cy="60" r="50" fill="none"
+            stroke="{% if result[1] < 40 %}#34d399{% elif result[1] < 70 %}#fbbf24{% else %}#f87171{% endif %}"
+            stroke-width="10"
+            stroke-linecap="round"
+            stroke-dasharray="{{ (result[1] / 100 * 314)|round }} 314"
+            stroke-dashoffset="78"
+            transform="rotate(-90 60 60)"
+            style="filter: drop-shadow(0 0 6px {% if result[1] < 40 %}rgba(52,211,153,0.5){% elif result[1] < 70 %}rgba(251,191,36,0.5){% else %}rgba(248,113,113,0.5){% endif %});"
+          />
+        </svg>
+        <div class="risk-label-center">
+          <div class="risk-percent {% if result[1] < 40 %}risk-low{% elif result[1] < 70 %}risk-medium{% else %}risk-high{% endif %}">{{ result[1] }}%</div>
+          <div class="risk-word">risk score</div>
+        </div>
+      </div>
+
+      <div class="result-details">
+        <div class="result-level {% if result[1] < 40 %}risk-low{% elif result[1] < 70 %}risk-medium{% else %}risk-high{% endif %}">
+          {{ result[0] }}
+        </div>
+        <div class="result-desc">
+          {% if result[1] < 40 %}
+          Your symptom profile indicates a low burden of post-COVID effects. Continue monitoring your wellbeing, maintain a healthy routine, and reassess if new symptoms arise.
+          {% elif result[1] < 70 %}
+          Your symptom profile suggests a moderate Long COVID burden. It is advisable to consult a healthcare provider, pace your activities, and adopt targeted recovery strategies for your key symptom clusters.
+          {% else %}
+          Your symptom profile indicates a high Long COVID burden. We strongly recommend seeking specialist medical evaluation. Avoid strenuous activity and follow structured rehabilitation guidance.
+          {% endif %}
+        </div>
+        <div class="download-area">
+          <div class="download-text">Full clinical report with AI-generated guidance and visualisations.</div>
+          <a href="/download_report" class="btn-secondary">📄 Download Medical Report</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ML Predictions -->
+    {% if ml %}
+    <div style="margin-top: 28px;">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px;">Model Consensus</div>
+      <div class="ml-grid">
+        <div class="ml-badge">
+          <div class="ml-badge-label">Logistic Reg.</div>
+          <div class="ml-badge-value">{{ ml.logistic }}</div>
+        </div>
+        <div class="ml-badge">
+          <div class="ml-badge-label">Random Forest</div>
+          <div class="ml-badge-value">{{ ml.random_forest }}</div>
+        </div>
+        <div class="ml-badge">
+          <div class="ml-badge-label">K-Means</div>
+          <div class="ml-badge-value">{{ ml.kmeans }}</div>
+        </div>
+        <div class="ml-badge">
+          <div class="ml-badge-label">Hierarchical</div>
+          <div class="ml-badge-value">{{ ml.hierarchical }}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:10px;">Cluster class: 0 = Low, 1 = Moderate, 2 = High burden</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- CATEGORY SEVERITY -->
+  {% if categories %}
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon icon-purple">🧩</div>
+      <div>
+        <div class="card-title">Symptom Categories</div>
+        <div class="card-subtitle">Grouped severity across four clinical domains</div>
+      </div>
+    </div>
+    <div class="cat-list">
+      {% for name, val in categories.items() %}
+      <div class="cat-item">
+        <div class="cat-top">
+          <span class="cat-name">
+            {% if name == 'Respiratory' %}🫁{% elif name == 'Neurological' %}🧠{% elif name == 'Fatigue' %}⚡{% else %}💭{% endif %}
+            {{ name }}
+          </span>
+          <span class="cat-val">{{ val }} / 10</span>
+        </div>
+        <div class="cat-bar">
+          <div class="cat-fill {% if name == 'Respiratory' %}fill-blue{% elif name == 'Neurological' %}fill-purple{% elif name == 'Fatigue' %}fill-yellow{% else %}fill-red{% endif %}"
+               style="width: {{ (val / 10 * 100)|round }}%;"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <!-- DASHBOARD CHART -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon icon-green">📈</div>
+      <div>
+        <div class="card-title">Symptom Dashboard</div>
+        <div class="card-subtitle">Visual breakdown of current symptom severity</div>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="symChart"></canvas>
+    </div>
+  </div>
+
+  <!-- 3D CLUSTER -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon icon-blue">🔬</div>
+      <div>
+        <div class="card-title">3D Cluster Visualisation</div>
+        <div class="card-subtitle">See where your profile sits within the patient population</div>
+      </div>
+    </div>
+    <div class="graph-section">
+      <a href="/cluster_graph" target="_blank" class="btn-secondary">Open 3D Graph ↗</a>
+      <p>Opens in a new tab — your position is marked in red.</p>
+    </div>
+  </div>
+
+  <!-- HEALTH CHAT -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon icon-purple">💬</div>
+      <div>
+        <div class="card-title">Symptom Advisor</div>
+        <div class="card-subtitle">Get instant, guided care steps for your symptoms</div>
+      </div>
+    </div>
+    <div id="chatBox" class="chatbox">
+      <div class="bot msg">👋 Hello! Select a symptom below to receive personalised care guidance with step-by-step instructions.</div>
+    </div>
+    <div class="chat-input-row">
+      <select id="q" class="chat-select">
+        <option value="">— Choose a symptom —</option>
+        <option value="fatigue">😴 Fatigue</option>
+        <option value="cough">🤧 Cough</option>
+        <option value="breath">🫁 Breathing Difficulty</option>
+        <option value="headache">🤕 Headache</option>
+        <option value="sleep">🛌 Sleep Issues</option>
+        <option value="memory">🧠 Memory / Brain Fog</option>
+        <option value="chest">💔 Chest Pain</option>
+        <option value="smell">👃 Loss of Smell</option>
+        <option value="fever">🌡️ Fever</option>
+        <option value="weakness">💪 Weakness</option>
+      </select>
+      <button class="btn-icon" onclick="sendMsg()" title="Send">➤</button>
+      <button class="btn-icon" onclick="voice()" title="Voice input">🎤</button>
+    </div>
+    <div class="voice-area">
+      <span style="font-size:20px;">🎙</span>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text-dim);">Voice Input</div>
+        <div class="voice-status" id="voiceStatus">Click the mic icon and say your symptom aloud</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon icon-green">📋</div>
+      <div>
+        <div class="card-title">Assessment History</div>
+        <div class="card-subtitle">Previous risk scores for this session</div>
+      </div>
+    </div>
+    {% if history %}
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>Patient</th>
+          <th>Date</th>
+          <th>Risk Score</th>
+          <th>Level</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in history %}
+        <tr>
+          <td>{{ h.Name }}</td>
+          <td>{{ h.Date }}</td>
+          <td>
+            <span class="risk-pill {% if h.Risk < 40 %}pill-low{% elif h.Risk < 70 %}pill-mid{% else %}pill-high{% endif %}">
+              {{ h.Risk }}%
+            </span>
+          </td>
+          <td style="color:var(--text-muted)">
+            {% if h.Risk < 40 %}Low Risk{% elif h.Risk < 70 %}Medium Risk{% else %}High Risk{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">📂</div>
+      No assessments recorded yet. Submit your first assessment above.
+    </div>
+    {% endif %}
+  </div>
+
+</div><!-- /wrapper -->
+
+<script>
+// ─── SYMPTOM DATA ───
+const symptoms = [
+  { name: "Fatigue",    emoji: "😴" },
+  { name: "Cough",      emoji: "🤧" },
+  { name: "Breathing",  emoji: "🫁" },
+  { name: "Headache",   emoji: "🤕" },
+  { name: "Sleep",      emoji: "🛌" },
+  { name: "Memory",     emoji: "🧠" },
+  { name: "Chest Pain", emoji: "💔" },
+  { name: "Smell Loss", emoji: "👃" },
+  { name: "Fever",      emoji: "🌡️" },
+  { name: "Weakness",   emoji: "💪" }
+];
+
+const initValues = {{ symptoms | tojson }};
+
+// ─── BUILD SLIDERS ───
+const grid = document.getElementById("sliderGrid");
+symptoms.forEach((s, i) => {
+  const val = initValues[i] || 5;
+  const div = document.createElement("div");
+  div.className = "slider-item";
+  div.innerHTML = `
+    <div class="slider-top">
+      <div class="slider-name">
+        <span class="slider-emoji">${s.emoji}</span>
+        ${s.name}
+      </div>
+      <div class="slider-value" id="v${i}">${val}</div>
+    </div>
+    <input type="range" min="0" max="10" value="${val}" name="f${i+1}"
+      oninput="updateSlider(${i}, this.value)">
+  `;
+  grid.appendChild(div);
+});
+
+function updateSlider(i, v) {
+  const el = document.getElementById(`v${i}`);
+  el.innerText = v;
+  const n = parseInt(v);
+  if (n <= 3) el.style.color = "var(--accent3)";
+  else if (n <= 6) el.style.color = "var(--warn)";
+  else el.style.color = "var(--danger)";
+  updateChart();
+}
+
+// ─── CHART ───
+const ctx = document.getElementById("symChart").getContext("2d");
+const chartData = {
+  labels: symptoms.map(s => s.name),
+  datasets: [{
+    label: "Severity",
+    data: initValues,
+    backgroundColor: initValues.map(v =>
+      v <= 3 ? "rgba(52,211,153,0.3)" :
+      v <= 6 ? "rgba(251,191,36,0.3)" : "rgba(248,113,113,0.3)"
+    ),
+    borderColor: initValues.map(v =>
+      v <= 3 ? "#34d399" : v <= 6 ? "#fbbf24" : "#f87171"
+    ),
+    borderWidth: 2,
+    borderRadius: 6,
+    borderSkipped: false,
+  }]
+};
+
+const symChart = new Chart(ctx, {
+  type: "bar",
+  data: chartData,
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: "#1a2235",
+        titleColor: "#e2e8f0",
+        bodyColor: "#94a3b8",
+        borderColor: "rgba(99,179,237,0.2)",
+        borderWidth: 1,
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: "rgba(99,179,237,0.06)" },
+        ticks: { color: "#64748b", font: { family: "DM Sans", size: 12 } }
+      },
+      y: {
+        min: 0, max: 10,
+        grid: { color: "rgba(99,179,237,0.06)" },
+        ticks: { color: "#64748b", font: { family: "JetBrains Mono", size: 11 } }
+      }
+    }
+  }
+});
+
+function updateChart() {
+  const vals = Array.from(document.querySelectorAll("input[type=range]")).map(r => parseInt(r.value));
+  symChart.data.datasets[0].data = vals;
+  symChart.data.datasets[0].backgroundColor = vals.map(v =>
+    v <= 3 ? "rgba(52,211,153,0.3)" : v <= 6 ? "rgba(251,191,36,0.3)" : "rgba(248,113,113,0.3)"
+  );
+  symChart.data.datasets[0].borderColor = vals.map(v =>
+    v <= 3 ? "#34d399" : v <= 6 ? "#fbbf24" : "#f87171"
+  );
+  symChart.update();
+}
+
+// ─── CHAT ───
+function speak(text) {
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.95;
+  speechSynthesis.speak(u);
+}
+
+function addMsg(html, type) {
+  const div = document.createElement("div");
+  div.className = "msg " + type;
+  div.innerHTML = html;
+  const box = document.getElementById("chatBox");
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function sendMsg() {
+  const q = document.getElementById("q").value;
+  if (!q) { alert("Please select a symptom."); return; }
+  addMsg("🔍 " + q.charAt(0).toUpperCase() + q.slice(1), "user");
+  fetch("/chatbot", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: q })
+  }).then(r => r.json()).then(d => {
+    let html = `<strong>💊 ${d.reply}</strong>`;
+    if (d.image) html += `<br><img src="${d.image}" alt="advice">`;
+    if (d.steps.length > 0) {
+      html += "<ul>" + d.steps.map(s => `<li>${s}</li>`).join("") + "</ul>";
+    }
+    addMsg(html, "bot");
+    speak(d.reply);
+  });
+}
+
+// ─── VOICE ───
+function voice() {
+  const status = document.getElementById("voiceStatus");
+  const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Rec) { alert("Speech recognition not supported in this browser."); return; }
+  const rec = new Rec();
+  status.textContent = "🎤 Listening…";
+  rec.start();
+  rec.onresult = e => {
+    const text = e.results[0][0].transcript.toLowerCase();
+    status.textContent = `Heard: "${text}"`;
+    const opts = ["fatigue","cough","breath","headache","sleep","memory","chest","smell","fever","weakness"];
+    for (const o of opts) {
+      if (text.includes(o)) {
+        document.getElementById("q").value = o;
+        sendMsg();
+        return;
+      }
+    }
+    status.textContent = "No matching symptom found. Try again.";
+  };
+  rec.onerror = () => { status.textContent = "Microphone error. Please allow access."; };
+}
+</script>
+</body>
+</html>
